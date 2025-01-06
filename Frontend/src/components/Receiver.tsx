@@ -1,6 +1,7 @@
 import  { useEffect } from 'react'
 
 export default function Receiver() {
+  // const videoRef = useRef<HTMLVideoElement>(null);
   // const [receiverSocket, setReceiverSocket] = useState<WebSocket|null>(null);
   useEffect(()=>{
     const socket = new WebSocket('ws://localhost:8080');
@@ -8,8 +9,9 @@ export default function Receiver() {
       socket.send(JSON.stringify({type:"receiver"}));
     }
 
-    socket.onmessage= async (event)=>{
+    socket.onmessage = async (event)=>{
       const message = JSON.parse(event.data);
+  
       let pc =  new RTCPeerConnection();
       if(message.type==="createOffer"){
         pc.setRemoteDescription(message.sdp);
@@ -19,11 +21,21 @@ export default function Receiver() {
           }
         }
 
-        pc.ontrack=(track)=>{
-          console.log(track);
+        pc.ontrack=(event)=>{
+          // console.log(event);
+          const video = document.createElement('video');
+          video.controls = true;
+          document.body.appendChild(video);
+          video.srcObject = new MediaStream([event.track]);
+          setTimeout(()=>{
+            video.play();
+          },1000)
+          // if(videoRef.current){
+          //   videoRef.current.srcObject = new MediaStream([event.track]);
+          // }
         }
         const answer = await pc.createAnswer();
-        pc.setLocalDescription(answer);
+        await pc.setLocalDescription(answer);
         socket.send(JSON.stringify({type:"createAnswer", sdp:pc.localDescription}));
 
       }

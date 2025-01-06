@@ -29,15 +29,22 @@ export default function Sender() {
       senderSocket.onmessage=(event)=>{
         const message = JSON.parse(event.data);
 
-        if(message.type==='createAnswer'){
-          pc.setRemoteDescription(message.data);
+        if(message.type==="createAnswer"){
+          pc.setRemoteDescription(message.sdp);
         }
         else if(message.type==="iceCandidate"){
           pc.addIceCandidate(message.candidate);
         }
       }
-      const vdoStream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
-      pc.addTrack(vdoStream.getVideoTracks()[0]);
+      const stream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:true});
+      pc.addTrack(stream.getVideoTracks()[0]);
+      const video = document.createElement('video');
+      video.controls = true;
+      document.body.appendChild(video);
+      video.srcObject = stream;
+      setTimeout(()=>{
+        video.play();
+      },1000)
     }
   return (
     <div>
