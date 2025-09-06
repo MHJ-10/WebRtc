@@ -1,54 +1,86 @@
-import {useEffect, useState } from 'react'
+import { useEffect, useRef } from "react";
 
 export default function Sender() {
-  const [senderSocket, setSenderSocket] = useState<WebSocket|null>(null);
-    useEffect(()=>{
-        const socket = new WebSocket('ws://localhost:8080');
-        socket.onopen=()=>{
-            socket.send(JSON.stringify({type:"sender"}))
-        }
-        setSenderSocket(socket);
-    },[])
+  const connection = useRef<WebSocket | null>(null);
+  const sender = useRef<RTCPeerConnection | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-    async function startSendingVideo(){
-      if(!senderSocket) return;
-      const pc = new RTCPeerConnection();
-      pc.onnegotiationneeded = async () =>{
-        console.log("negotiated");
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        senderSocket?.send(JSON.stringify({type:'createOffer', sdp:pc.localDescription}));
-      }
-     
-      pc.onicecandidate = (event)=>{
-        if(event.candidate){
-          senderSocket?.send(JSON.stringify({type:'iceCandidate', candidate:event.candidate}));
-        }
-      }
+  useEffect(() => {
+    const socket = new WebSocket("ws://localhost:8080");
+    const pc = new RTCPeerConnection();
+    sender.current = pc;
 
-      senderSocket.onmessage=(event)=>{
-        const message = JSON.parse(event.data);
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ type: "sender" }));
+    };
 
-        if(message.type==="createAnswer"){
+    pc.ontrack = (e) => {
+      console.log(e);
+    };
+
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+
+      switch (message.type) {
+        case "createAnswer":
           pc.setRemoteDescription(message.sdp);
-        }
-        else if(message.type==="iceCandidate"){
+          break;
+        case "iceCandidate":
           pc.addIceCandidate(message.candidate);
-        }
+          break;
+        default:
+          break;
       }
-      const stream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:true});
-      pc.addTrack(stream.getVideoTracks()[0]);
-      const video = document.createElement('video');
-      video.controls = true;
-      document.body.appendChild(video);
-      video.srcObject = stream;
-      setTimeout(()=>{
-        video.play();
-      },1000)
+    };
+
+    connection.current = socket;
+
+    return () => socket.close();
+  }, []);
+
+  const onSendOffer = async () => {
+    if (!connection.current || !sender.current) return;
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      audio: true,
+      video: true,
+    });
+
+    if (videoRef.current) {
+      videoRef.current.width = 300;
+      videoRef.current.height = 150;
+      videoRef.current.srcObject = stream;
     }
+    sender.current.addTrack(stream.getVideoTracks()[0]);
+
+    const offer = await sender.current.createOffer();
+    sender.current.setLocalDescription(offer);
+    connection.current.send(
+      JSON.stringify({ type: "createOffer", sdp: offer })
+    );
+
+    sender.current.onicecandidate = (e) => {
+      console.log(e.candidate);
+      connection.current!.send(
+        JSON.stringify({ type: "iceCandidate", candidate: e.candidate })
+      );
+    };
+  };
+
   return (
     <div>
-      <button onClick={startSendingVideo}>Sender</button>
+      <button onClick={onSendOffer}>Sender</button>
+
+      <button
+        onClick={() => {
+          console.log(sender.current?.localDescription);
+          console.log(sender.current?.remoteDescription);
+        }}
+      >
+        Get Status
+      </button>
+
+      <video ref={videoRef} autoPlay width={300} height={150} />
     </div>
-  )
+  );
 }

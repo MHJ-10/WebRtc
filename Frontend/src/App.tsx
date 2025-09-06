@@ -1,19 +1,19 @@
-import './App.css'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import Sender from './components/Sender'
-import Receiver from './components/Receiver'
+import "./App.css";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import Sender from "./components/Sender";
+import Receiver from "./components/Receiver";
+import Home from "./components/Home";
 
 function App() {
- 
-
   return (
     <BrowserRouter>
-    <Routes>
-    <Route path="/sender" element={<Sender />} />
-    <Route path="/receiver" element={<Receiver />} />
-    </Routes>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/sender" element={<Sender />} />
+        <Route path="/receiver" element={<Receiver />} />
+      </Routes>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
+export default App;
