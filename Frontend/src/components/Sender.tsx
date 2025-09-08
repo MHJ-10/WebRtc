@@ -3,27 +3,37 @@ import { useEffect, useRef } from "react";
 export default function Sender() {
   const connection = useRef<WebSocket | null>(null);
   const sender = useRef<RTCPeerConnection | null>(null);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const receiverVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket("ws://localhost:8080");
     const pc = new RTCPeerConnection();
     sender.current = pc;
 
+    pc.ontrack = (e) => {
+      const [remoteStream] = e.streams;
+      if (receiverVideoRef.current) {
+        receiverVideoRef.current.srcObject = remoteStream;
+      }
+    };
+
     socket.onopen = () => {
       socket.send(JSON.stringify({ type: "sender" }));
     };
-
-    pc.ontrack = (e) => {
-      console.log(e);
-    };
-
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
 
       switch (message.type) {
         case "createAnswer":
           pc.setRemoteDescription(message.sdp);
+          pc.ontrack = (e) => {
+            const [remoteStream] = e.streams;
+            if (receiverVideoRef.current) {
+              receiverVideoRef.current.srcObject = remoteStream;
+            }
+          };
           break;
         case "iceCandidate":
           pc.addIceCandidate(message.candidate);
@@ -47,11 +57,9 @@ export default function Sender() {
     });
 
     if (videoRef.current) {
-      videoRef.current.width = 300;
-      videoRef.current.height = 150;
       videoRef.current.srcObject = stream;
     }
-    sender.current.addTrack(stream.getVideoTracks()[0]);
+    sender.current.addTrack(stream.getVideoTracks()[0], stream);
 
     const offer = await sender.current.createOffer();
     sender.current.setLocalDescription(offer);
@@ -60,7 +68,6 @@ export default function Sender() {
     );
 
     sender.current.onicecandidate = (e) => {
-      console.log(e.candidate);
       connection.current!.send(
         JSON.stringify({ type: "iceCandidate", candidate: e.candidate })
       );
@@ -71,16 +78,22 @@ export default function Sender() {
     <div>
       <button onClick={onSendOffer}>Sender</button>
 
-      <button
-        onClick={() => {
-          console.log(sender.current?.localDescription);
-          console.log(sender.current?.remoteDescription);
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
         }}
       >
-        Get Status
-      </button>
-
-      <video ref={videoRef} autoPlay width={300} height={150} />
+        <div style={{ border: "2px solid red" }}>
+          <h3>My Screen</h3>
+          <video ref={videoRef} autoPlay width={600} height={550} />
+        </div>
+        <div style={{ border: "2px solid blue" }}>
+          <h3>Contact Screen</h3>
+          <video ref={receiverVideoRef} autoPlay width={600} height={550} />
+        </div>
+      </div>
     </div>
   );
 }

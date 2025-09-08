@@ -12,6 +12,13 @@ export default function Receiver() {
     const pc = new RTCPeerConnection();
     receiver.current = pc;
 
+    pc.ontrack = (event) => {
+      const remoteStream = event.streams[0] || new MediaStream([event.track]);
+      if (videoRef.current) {
+        videoRef.current.srcObject = remoteStream;
+      }
+    };
+
     socket.onopen = () => {
       socket.send(JSON.stringify({ type: "receiver" }));
     };
@@ -21,11 +28,11 @@ export default function Receiver() {
 
       switch (message.type) {
         case "createOffer": {
-          pc.setRemoteDescription(message.sdp);
+          await pc.setRemoteDescription(message.sdp);
+
           pc.onicecandidate = (event) => {
-            console.log(event.candidate);
             if (event.candidate) {
-              socket?.send(
+              socket.send(
                 JSON.stringify({
                   type: "iceCandidate",
                   candidate: event.candidate,
@@ -33,13 +40,28 @@ export default function Receiver() {
               );
             }
           };
+
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            audio: true,
+            video: true,
+          });
+
+          if (ownVideoRef.current) {
+            ownVideoRef.current.srcObject = stream;
+          }
+
+          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
           const answer = await pc.createAnswer();
-          pc.setLocalDescription(answer);
-          socket.send(JSON.stringify({ type: "createAnswer", sdp: answer }));
+          await pc.setLocalDescription(answer);
+
+          socket.send(
+            JSON.stringify({ type: "createAnswer", sdp: pc.localDescription })
+          );
           break;
         }
         case "iceCandidate":
-          pc.addIceCandidate(message.candidate);
+          await pc.addIceCandidate(message.candidate);
           break;
         default:
           break;
@@ -47,40 +69,25 @@ export default function Receiver() {
     };
 
     connection.current = socket;
-
     return () => socket.close();
   }, []);
 
-  // useEffect(() => {
-
-  //   socket.onmessage = async (event) => {
-
-  //     if (message.type === "createOffer") {
-  //       pc.ontrack = (event) => {
-  //         const stream = event.streams[0] || new MediaStream([event.track]);
-  //         if (videoRef.current) {
-  //           videoRef.current.srcObject = stream;
-  //           videoRef.current.width = 300;
-  //           videoRef.current.height = 150;
-  //         }
-  //       };
-
-  //   };
-  // }, []);
-
   return (
-    <div>
-      Receiver
-      <button
-        onClick={() => {
-          console.log(receiver.current?.localDescription);
-          console.log(receiver.current?.remoteDescription);
-        }}
-      >
-        Get Status
-      </button>
-      <video ref={videoRef} autoPlay width={300} height={150} />
-      <video ref={ownVideoRef} autoPlay width={300} height={150} />
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 10,
+      }}
+    >
+      <div style={{ border: "2px solid blue" }}>
+        <h3>My Screen</h3>
+        <video ref={ownVideoRef} autoPlay width={600} height={550} />
+      </div>
+      <div style={{ border: "2px solid red" }}>
+        <h3>Contact Screen</h3>
+        <video ref={videoRef} autoPlay width={600} height={550} />
+      </div>
     </div>
   );
 }
